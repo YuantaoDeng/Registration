@@ -4,7 +4,6 @@ from scipy.ndimage import gaussian_filter
 
 class CustomDemonsRegistrationFilter:
     def __init__(self):
-        # 默认参数设置
         self.number_of_iterations = 20
         self.maximum_step_length = 2.0
         self.exp_steps = 4  # scaling-and-squaring steps
