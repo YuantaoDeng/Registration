@@ -209,6 +209,4 @@ class CustomDemonsRegistrationFilter:
         warped_image = F.grid_sample(image_t, normalized_grid, mode='bilinear', align_corners=True, padding_mode='zeros')
         return warped_image.squeeze(0).squeeze(0)
 
-# Example iteration callback function
-def iteration_callback(filter):
-    print("\rIteration {0}: Metric = {1:.2f}".format(filter.GetElapsedIterations(), filter.GetMetric()), end="")
+
