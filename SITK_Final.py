@@ -1,11 +1,12 @@
 import SimpleITK as sitk
 import numpy as np
 import matplotlib.pyplot as plt
+from Torch_based import CustomDemonsRegistrationFilter
 
 
 # read initial image
-fixed_path =
-moving_path =
+fixed_path = r"Tyche-A7_0.png"
+moving_path = r"Tyche-A7_1.png"
 fixed_image = sitk.ReadImage(fixed_path)
 moving_image = sitk.ReadImage(moving_path)
 
@@ -14,9 +15,9 @@ def rgb_to_gray(image):
     green = sitk.VectorIndexSelectionCast(image, 1)
     blue = sitk.VectorIndexSelectionCast(image, 2)
 
-    red = sitk.Cast(red, sitk.sitkFloat32)
-    green = sitk.Cast(green, sitk.sitkFloat32)
-    blue = sitk.Cast(blue, sitk.sitkFloat32)
+    red = sitk.Cast(red, sitk.sitkFloat64)
+    green = sitk.Cast(green, sitk.sitkFloat64)
+    blue = sitk.Cast(blue, sitk.sitkFloat64)
 
     gray = 0.2989 * red + 0.5870 * green + 0.1140 * blue  # calculating by simple summation
     return gray
@@ -44,7 +45,7 @@ def smooth_and_resample(image, shrink_factor, smoothing_sigma):
         smoothed_image,
         new_size,
         sitk.Transform(),
-        sitk.sitkBSpline,  # could change to other methods
+        sitk.sitkNearestNeighbor,  # could change to other methods
         image.GetOrigin(),
         new_spacing,
         image.GetDirection(),
@@ -84,7 +85,7 @@ def multiscale_demons_2d(
         initial_displacement_field = sitk.TransformToDisplacementField(
             initial_transform,
             sitk.sitkVectorFloat64,
-            fixed_images[-1].GetSize(),  # 此时 fixed_gray 是二维的 (宽, 高)
+            fixed_images[-1].GetSize(),
             fixed_images[-1].GetOrigin(),
             fixed_images[-1].GetSpacing(),
             fixed_images[-1].GetDirection(),
@@ -119,12 +120,16 @@ fixed_gray = rgb_to_gray(fixed_image)
 moving_gray = rgb_to_gray(moving_image)
 
 
-registration_algorithm = sitk.SymmetricForcesDemonsRegistrationFilter()
-registration_algorithm.SetNumberOfIterations(100)
+registration_algorithm = sitk.DiffeomorphicDemonsRegistrationFilter()
+registration_algorithm.SetMaximumUpdateStepLength(1.0)
+registration_algorithm.SetNumberOfIterations(200)
 registration_algorithm.SetSmoothDisplacementField(True)
 registration_algorithm.SetStandardDeviations(1.0)
 registration_algorithm.AddCommand(sitk.sitkIterationEvent, lambda: iteration_callback(registration_algorithm))
 
+
+shrink_factors = [4, 2, 1]
+smoothing_sigmas = [1.5, 0.75, 0.25]
 
 
 # conducting registration
@@ -132,66 +137,40 @@ tx = multiscale_demons_2d(
     registration_algorithm=registration_algorithm,
     fixed_image=fixed_gray,
     moving_image=moving_gray,
+    shrink_factors=shrink_factors,
+    smoothing_sigmas=smoothing_sigmas,
 )
 
 
 # resample using the transform we get
-registered_image = sitk.Resample(moving_gray, fixed_gray, tx, sitk.sitkHammingWindowedSinc, 40.0)
+registered_image = sitk.Resample(moving_gray, fixed_gray, tx, sitk.sitkNearestNeighbor, 40.0)
 
 # plotting
-fixed_arr = sitk.GetArrayFromImage(fixed_gray)
-moving_arr = sitk.GetArrayFromImage(moving_gray)
+fixed_arr = sitk.GetArrayFromImage(fixed_gray).astype(np.float64) / 255.0
+moving_arr = sitk.GetArrayFromImage(moving_gray).astype(np.float64) / 255.0
+
 registered_arr = sitk.GetArrayFromImage(registered_image)
 
-fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-axes[0].imshow(fixed_arr, cmap="gray")
-axes[0].set_title("Fixed Gray Image")
-axes[0].axis("off")
 
-axes[1].imshow(moving_arr, cmap="gray")
-axes[1].set_title("Moving Gray Image")
-axes[1].axis("off")
-
-axes[2].imshow(registered_arr, cmap="gray")
-axes[2].set_title("Registered Image")
-axes[2].axis("off")
-
-plt.tight_layout()
-plt.show()
-
-
-import matplotlib.pyplot as plt
-
-
-img_fixed = fixed_gray
-img_moving = moving_gray
-img_registered = registered_image
-
-diff_image = sitk.Abs(sitk.Subtract(fixed_gray, registered_image))
-
-diff_arr = sitk.GetArrayFromImage(diff_image)
-
-mean_diff = np.mean(diff_arr)
-mse_diff = np.mean(np.square(diff_arr - mean_diff))
-max_diff = np.max(diff_arr)
-print("Mean absolute difference:", mean_diff)
-print("Mean squared difference:", mse_diff)
-print("Maximum difference:", max_diff)
-
-plt.figure(figsize=(6, 6))
-plt.imshow(diff_arr, cmap='gray')
-plt.title("Absolute Difference between Fixed and Registered Images")
-plt.axis("off")
-plt.show()
 
 
 images = [fixed_arr, moving_arr, registered_arr]
 titles = ["Fixed Image", "Moving Image", "Registered Image"]
 
-fig, ax = plt.subplots(figsize=(6, 4))
-ax.axis('off')
 
-im_obj = ax.imshow(images[0], cmap='gray')
-ax.set_title(titles[0])
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+
+for i in range(3):
+    axes[i].imshow(images[i], cmap='gray', interpolation="none")
+    axes[i].set_title(titles[i])
+    axes[i].axis('off')
+
+
+fig.suptitle("SITK", fontsize=16, y=0.95)
+
+plt.tight_layout()
+plt.show()
+
 
 
