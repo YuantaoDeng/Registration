@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import pirt
 from skimage.metrics import structural_similarity
 
-# 配准参数设置
 registration_config = {
     'img_type': "enhanced_img",
     'grid_sampling_factor': 1,
